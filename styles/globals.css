@@ -24,3 +24,32 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+* {
+  user-select: none;
+}
+
+/* Kích thước scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+/* Nền của scrollbar */
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* Thanh cuộn */
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+/* Hover trên thanh cuộn */
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+button:hover {
+  cursor: pointer;
+}
