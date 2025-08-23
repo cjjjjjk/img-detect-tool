@@ -15,9 +15,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export interface imgObjectData {
+  name: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+}
+
 export default function Home() {
   const [leftWidth, setLeftWidth] = useState(250);
-  const [rightWidth, setRightWidth] = useState(300);
+  const [rightWidth, setRightWidth] = useState(400);
   const [draggingRight, setDraggingRight] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +58,14 @@ export default function Home() {
   }, [draggingRight]);
 
 
+
+  // file handling
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imageDataOutput, setImageDataOutput] = useState<imgObjectData | null>(null)
+
+  useEffect(() => {
+    console.log(imageDataOutput)
+  }, [imageDataOutput])
   return (
     <div
       ref={containerRef}
@@ -67,13 +83,21 @@ export default function Home() {
           {leftWidth === 50 ? ">>" : "<<"}
         </button>
         {leftWidth > 0 && <div className="p-2">
-          <InputContainer></InputContainer>
+          <InputContainer
+            onFileSelect={setSelectedImage}
+          ></InputContainer>
         </div>}
       </div>
 
       {/* Middle panel */}
-      <div className="flex-1 bg-white p-4">
-        <ToolContainer></ToolContainer>
+      <div className="flex-1 bg-white p-1">
+        <ToolContainer
+          file={selectedImage}
+          onDataOutput={setImageDataOutput}
+        ></ToolContainer>
+        <div>
+          next: space
+        </div>
       </div>
 
       {/* Right panel with resize */}
@@ -82,7 +106,9 @@ export default function Home() {
         className="relative bg-gray-300"
       >
         <div className="p-2">
-          <OutputContainer></OutputContainer>
+          <OutputContainer
+            imgData={imageDataOutput}
+          ></OutputContainer>
         </div>
         {/* Drag handle */}
         <div

@@ -1,3 +1,4 @@
+"use client";
 import { useState, useMemo } from "react";
 import React, { InputHTMLAttributes } from "react";
 
@@ -10,36 +11,51 @@ declare module "react" {
 
 const ITEMS_PER_PAGE = 50;
 
-export default function InputContainer() {
+interface InputContainerProps {
+    onFileSelect: (file: File) => void;
+}
+
+export default function InputContainer({ onFileSelect }: InputContainerProps) {
     const [files, setFiles] = useState<File[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
-    const handleFiles = (newFiles: FileList | null) => {
+    const handleFiles = async (newFiles: FileList | null) => {
         if (!newFiles) return;
 
         setIsUploading(true);
         setUploadProgress(0);
+        let progress = 0;
 
         const fileArray = Array.from(newFiles).filter((f) =>
             f.type.startsWith("image/")
         );
 
-        // Giả lập quá trình tải lên bằng setTimeout
-        let progress = 0;
         const interval = setInterval(() => {
-            progress += 10;
-            if (progress <= 100) {
+            if (progress < 80) {
+                progress += 2;
                 setUploadProgress(progress);
-            } else {
-                clearInterval(interval);
+            }
+        }, 100);
+
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            clearInterval(interval);
+            setUploadProgress(100);
+
+            setTimeout(() => {
                 setIsUploading(false);
                 setFiles((prev) => [...prev, ...fileArray]);
                 setCurrentPage(1);
-            }
-        }, 100);
+            }, 500);
+        } catch (err) {
+            clearInterval(interval);
+            setIsUploading(false);
+        }
     };
+
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -59,7 +75,7 @@ export default function InputContainer() {
     };
 
     const onSelectImg = (file: File) => {
-        console.log(file.name);
+        onFileSelect(file);
     };
 
     // Logic phân trang
