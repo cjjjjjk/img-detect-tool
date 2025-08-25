@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "posbuild": "cp -r .next/static out/_next/ && touch out/.nojekyll",
     "p-deploy": "gh-pages -d out -r https://git:${GH_TOKEN}@github.com/cjjjjjk/img-detect-tool.git"
   },
   "dependencies": {
