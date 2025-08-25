@@ -19,7 +19,6 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
-      - run: npm run posbuild
       - run: npm run p-deploy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
