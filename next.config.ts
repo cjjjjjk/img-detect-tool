@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  basePath: '/img-detect-tool'
+  basePath: isProd ? '/img-detect-tool' : ""
 };
 
 export default nextConfig;

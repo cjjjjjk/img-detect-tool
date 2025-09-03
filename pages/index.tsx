@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import InputContainer from "@/components/inputContainer";
+import InputContainer, { InputContainerHandle } from "@/components/inputContainer";
 import OutputContainer from "@/components/ouputContainer";
 import ToolContainer from "@/components/toolContainer";
 
@@ -25,7 +25,7 @@ export interface imgObjectData {
 
 export default function Home() {
   const [leftWidth, setLeftWidth] = useState(250);
-  const [rightWidth, setRightWidth] = useState(400);
+  const [rightWidth, setRightWidth] = useState(300);
   const [draggingRight, setDraggingRight] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,7 +36,7 @@ export default function Home() {
       if (draggingRight && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const newWidth = rect.right - e.clientX;
-        if (newWidth > 150 && newWidth < 600) {
+        if (newWidth > 250 && newWidth < 600) {
           setRightWidth(newWidth);
         }
       }
@@ -63,8 +63,28 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imageDataOutput, setImageDataOutput] = useState<imgObjectData | null>(null)
 
+  // events
+  const inputRef = useRef<InputContainerHandle>(null);
   useEffect(() => {
-    console.log(imageDataOutput)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.ctrlKey) {
+        console.log('next')
+        e.preventDefault();
+        inputRef.current?.nextImage();
+      }
+      if (e.code === "Space" && e.ctrlKey) {
+        e.preventDefault();
+        inputRef.current?.prevImage();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+
+  useEffect(() => {
+    console.log("Oke", imageDataOutput)
   }, [imageDataOutput])
   return (
     <div
@@ -77,28 +97,39 @@ export default function Home() {
         className="bg-gray-300 transition-all duration-300"
       >
         <button
-          onClick={() => setLeftWidth(leftWidth === 50 ? 300 : 50)}
+          onClick={() => setLeftWidth(leftWidth === 100 ? 300 : 100)}
           className="p-2 bg-gray-500 text-white"
         >
-          {leftWidth === 50 ? ">>" : "<<"}
+          {leftWidth === 100 ? ">>" : "<<"}
         </button>
         {leftWidth > 0 && <div className="p-2">
           <InputContainer
+            ref={inputRef}
             onFileSelect={setSelectedImage}
+            isWidthCollapsed={leftWidth === 100}
           ></InputContainer>
         </div>}
       </div>
 
       {/* Middle panel */}
-      <div className="flex-1 bg-white p-1">
+      <div className="flex-1 bg-white p-2 flex flex-col gap-2">
         <ToolContainer
           file={selectedImage}
           onDataOutput={setImageDataOutput}
-        ></ToolContainer>
-        <div>
-          next: space
+        />
+
+        <div className="mt-2 p-2 border border-gray-400 rounded bg-gray-50 text-sm text-gray-700">
+          <div className="flex flex-col items-start gap-4">
+            <span>
+              <kbd className="px-2 py-1 bg-gray-200 rounded">Space</kbd>:next image
+            </span>
+            <span>
+              <kbd className="px-2 py-1 bg-gray-200 rounded">Ctrl + Space</kbd>:previous image
+            </span>
+          </div>
         </div>
       </div>
+
 
       {/* Right panel with resize */}
       <div

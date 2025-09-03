@@ -10,19 +10,16 @@ export default function OutputContainer({ imgData }: OutputContainerProps) {
     const [showModal, setShowModal] = useState(false);
     const [exportType, setExportType] = useState<"csv" | "txt" | null>(null);
 
-    // cập nhật data khi imgData thay đổi
     useEffect(() => {
         if (!imgData) return;
 
         setData(prev => {
             const idx = prev.findIndex(d => d.name === imgData.name);
             if (idx !== -1) {
-                // update nếu trùng name
                 const newArr = [...prev];
                 newArr[idx] = imgData;
                 return newArr;
             } else {
-                // thêm mới nếu khác name
                 return [...prev, imgData];
             }
         });
@@ -63,10 +60,9 @@ export default function OutputContainer({ imgData }: OutputContainerProps) {
     };
 
     return (
-        <div className="p-4 border rounded mt-4">
+        <div className="p-4 border rounded mt-4 overflow-hidden">
             <h2 className="font-semibold mb-2">Output Data</h2>
 
-            {/* Bảng dữ liệu */}
             <table className="w-full border text-sm">
                 <thead>
                     <tr className="bg-gray-100">
@@ -99,7 +95,6 @@ export default function OutputContainer({ imgData }: OutputContainerProps) {
                 </tbody>
             </table>
 
-            {/* Nút export */}
             <div className="mt-4 flex gap-2">
                 <button
                     onClick={() => handleExport("csv")}
@@ -115,7 +110,6 @@ export default function OutputContainer({ imgData }: OutputContainerProps) {
                 </button>
             </div>
 
-            {/* Modal preview */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
                     <div className="bg-white p-4 rounded w-[400px]">
