@@ -43,7 +43,7 @@ export interface ImageSize {
 
 export default function Home() {
   const [leftWidth, setLeftWidth] = useState(250);
-  const [rightWidth, setRightWidth] = useState(300);
+  const [rightWidth, setRightWidth] = useState(500);
   const [draggingRight, setDraggingRight] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,7 +54,7 @@ export default function Home() {
       if (draggingRight && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const newWidth = rect.right - e.clientX;
-        if (newWidth > 250 && newWidth < 600) {
+        if (newWidth > 250 && newWidth < 800) {
           setRightWidth(newWidth);
         }
       }
@@ -132,11 +132,6 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  // Xóa console.log cũ
-  // useEffect(() => {
-  //   console.log("Oke", imageDataOutput)
-  // }, [imageDataOutput])
 
   return (
     <div

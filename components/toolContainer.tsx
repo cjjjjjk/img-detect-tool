@@ -375,14 +375,14 @@ export default function ToolContainer({
                 onContextMenu={handleContextMenu} // Bắt sự kiện chuột phải
             >
                 {!file ? (
-                    <div className="p-4 border w-[100%] text-gray-500 text-center">
-                        No image selected
+                    <div className="p-4 border border-dashed font-bold w-[100%] text-gray-500 text-center">
+                        no image selected
                     </div>
                 ) : (
                     <div>
-                        <p className="mt-2 text-sm text-center truncate flex">
+                        <p className="mt-2 text-black text-sm text-center truncate flex">
                             {file.name}
-                            <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-2 py-0.5 rounded-sm">{`w:${imgSize.naturalW} h:${imgSize.naturalH}`}</span>
+                            <span className="absolute top-1 left-4 bg-red-800 text-white text-xs px-2 py-0.5">{`w:${imgSize.naturalW} h:${imgSize.naturalH}`}</span>
                         </p>
                         <div
                             ref={imgWrapperRef}

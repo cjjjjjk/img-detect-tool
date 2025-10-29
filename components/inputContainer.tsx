@@ -206,8 +206,14 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
                         className="hidden"
                         onChange={(e) => handleFiles(e.target.files)}
                     />
-                    <p className="text-gray-700 font-medium">Select Image Folder</p>
-                    <p className="text-xs text-gray-500">or drag and drop</p>
+                    {isCollapsed ? (
+                        <p className="text-gray-700 font-medium">Select</p>
+                    ) : (
+                        <>
+                            <p className="text-gray-700 font-medium">Select Image Folder</p>
+                            <p className="text-xs text-gray-500">or drag and drop</p>
+                        </>
+                    )}
                 </div>
 
                 {isUploading ? (
@@ -228,8 +234,8 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
                                 <div
                                     key={startIndex + idx}
                                     className={`flex items-center justify-between cursor-pointer rounded p-1.5 ${(startIndex + idx) == selectedImgIdx
-                                            ? "bg-blue-100 border border-blue-300 text-blue-800"
-                                            : "text-gray-700 hover:bg-gray-100"
+                                        ? "bg-blue-100 border border-blue-300 text-blue-800"
+                                        : "text-gray-700 hover:bg-gray-100"
                                         }`}
                                     onClick={() => onSelectImg(file, startIndex + idx)}
                                 >
