@@ -356,13 +356,6 @@ export default function ToolContainer({
                 ))}
             </div>
 
-            {/* Thông báo trạng thái */}
-            {mode === 'add_keypoint' && (
-                <div className="p-2 text-center bg-blue-100 text-blue-800 rounded border border-blue-300 font-medium">
-                    Right-click INSIDE box <strong>{pendingKeypointBoxId?.substring(0, 6)}...</strong> to assign keypoint.
-                </div>
-            )}
-
 
             {/* Container chính */}
             <div
@@ -416,8 +409,8 @@ export default function ToolContainer({
                                                 height: ann.displayBox.h,
                                             }}
                                         >
-                                            <span className={`absolute -top-5 left-0 ${annClass.color.replace('border', 'text')} text-xs px-1 font-bold bg-white/50 backdrop-blur-sm rounded`}>
-                                                {ann.className} {isPending ? '(Awaiting keypoint)' : ''}
+                                            <span className={`absolute top-0 left-0 ${annClass.color.replace('border', 'text')} text-xs font-bold opacity-45 px-1 bg-red-600/60 backdrop-blur-sm`}>
+                                                {ann.className} {isPending ? '▶' : ''}
                                             </span>
                                         </div>
                                         {/* Keypoint */}
@@ -455,6 +448,13 @@ export default function ToolContainer({
                     </div>
                 )}
             </div>
+
+            {/* Thông báo trạng thái */}
+            {mode === 'add_keypoint' && (
+                <div className="p-2 text-center bg-blue-100 text-blue-800 rounded border border-blue-300 font-medium">
+                    Right-click INSIDE box <strong>{pendingKeypointBoxId?.substring(0, 6)}...</strong> to assign keypoint.
+                </div>
+            )}
         </>
     );
 }
