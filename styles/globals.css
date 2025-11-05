@@ -53,3 +53,28 @@ body {
 button:hover {
   cursor: pointer;
 }
+
+/* === MỚI: Thêm hiệu ứng highlight === */
+@keyframes flashYellow {
+  0% {
+    background-color: transparent;
+  }
+
+  25% {
+    background-color: #fef08a;
+    /* yellow-200 */
+  }
+
+  75% {
+    background-color: #fef08a;
+    /* yellow-200 */
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-yellow {
+  animation: flashYellow 1s ease-in-out;
+}
