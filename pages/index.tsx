@@ -41,6 +41,17 @@ export interface ImageSize {
   naturalH: number;
 }
 
+// === DI CHUYỂN CLASSES RA ĐÂY ===
+// Định nghĩa các lớp (class)
+export const CLASSES = [
+  { id: 0, name: "car", color: "border-red-500", bg: "bg-red-500/20" },
+  { id: 1, name: "bus", color: "border-blue-500", bg: "bg-blue-500/20" },
+  { id: 2, name: "truck", color: "border-green-500", bg: "bg-green-500/20" },
+  { id: 3, name: "motorcycle", color: "border-yellow-500", bg: "bg-yellow-500/20" },
+];
+export type ClassInfo = typeof CLASSES[0];
+
+
 export default function Home() {
   const [leftWidth, setLeftWidth] = useState(250);
   const [rightWidth, setRightWidth] = useState(500);
@@ -72,10 +83,11 @@ export default function Home() {
     };
   }, [draggingRight]);
 
-  // === THAY ĐỔI LOGIC STATE ===
+  // === CẬP NHẬT LOGIC STATE ===
 
   // file handling
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [allFiles, setAllFiles] = useState<File[]>([]); // <-- MỚI: Lưu trữ tất cả file
 
   // State mới: Lưu trữ kích thước natural của ảnh
   const [imgNaturalSize, setImgNaturalSize] = useState<ImageSize>({
@@ -92,14 +104,23 @@ export default function Home() {
   const currentAnnotations =
     allAnnotations.get(selectedImage?.name || "") || [];
 
-  // Hàm callback mới để ToolContainer và OutputContainer cập nhật danh sách nhãn
-  const handleAnnotationsChange = (newAnns: Annotation[]) => {
+  // === CÁC HÀM CẬP NHẬT MỚI ===
+
+  // Hàm callback để ToolContainer và OutputContainer cập nhật danh sách nhãn (cho 1 ảnh)
+  const handleSingleFileAnnotationsChange = (newAnns: Annotation[]) => {
     if (!selectedImage) return;
     // Tạo một Map mới để kích hoạt re-render
     const newMap = new Map(allAnnotations);
     newMap.set(selectedImage.name, newAnns);
     setAllAnnotations(newMap);
   };
+
+  // Hàm callback mới để cập nhật hàng loạt (khi import)
+  const handleBulkAnnotationsUpdate = (newAnnotationsMap: Map<string, Annotation[]>) => {
+    // Hợp nhất các nhãn mới vào state tổng
+    setAllAnnotations(new Map([...allAnnotations, ...newAnnotationsMap]));
+  };
+
 
   // Hàm callback mới để ToolContainer báo cáo kích thước ảnh
   const handleImageLoad = (size: {
@@ -138,7 +159,7 @@ export default function Home() {
       ref={containerRef}
       className={`${geistSans.className} ${geistMono.className} font-sans flex h-screen bg-gray-100`}
     >
-      {/* Left panel (Cập nhật style) */}
+      {/* Left panel (Cập nhật props) */}
       <div
         style={{ width: leftWidth }}
         className="bg-gray-200 transition-all duration-300 flex flex-col shadow-lg"
@@ -154,6 +175,7 @@ export default function Home() {
             <InputContainer
               ref={inputRef}
               onFileSelect={setSelectedImage}
+              onFilesChange={setAllFiles} // <-- MỚI: Lấy danh sách tất cả file
               isWidthCollapsed={leftWidth === 100}
             ></InputContainer>
           </div>
@@ -165,8 +187,9 @@ export default function Home() {
         <ToolContainer
           file={selectedImage}
           annotations={currentAnnotations} // Truyền các nhãn hiện tại
-          onAnnotationsChange={handleAnnotationsChange} // Truyền hàm callback cập nhật
+          onAnnotationsChange={handleSingleFileAnnotationsChange} // Cập nhật nhãn cho 1 file
           onImageLoad={handleImageLoad} // Truyền hàm callback lấy kích thước
+          CLASSES={CLASSES} // <-- MỚI: Truyền hằng số CLASSES
         />
 
         <div className="mt-2 p-3 border border-gray-300 rounded bg-gray-50 text-sm text-gray-700 shadow-sm">
@@ -199,10 +222,14 @@ export default function Home() {
             imageName={selectedImage?.name || ""}
             imageSize={imgNaturalSize}
             annotations={currentAnnotations}
-            onAnnotationsChange={handleAnnotationsChange}
+            onAnnotationsChange={handleSingleFileAnnotationsChange} // Cập nhật nhãn cho 1 file
+            // Props mới cho việc import
+            CLASSES={CLASSES}
+            allImageFiles={allFiles}
+            onBulkAnnotationsUpdate={handleBulkAnnotationsUpdate}
           />
         </div>
-        {/* Drag handle (Cập nhật style) */}
+        {/* Drag handle (Không thay đổi) */}
         <div
           onMouseDown={() => setDraggingRight(true)}
           className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-blue-400 transition-colors duration-200"

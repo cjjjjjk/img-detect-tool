@@ -1,15 +1,7 @@
 "use client";
 
-import { Annotation } from "@/pages"; // Import kiểu Annotation từ index
+import { Annotation, ClassInfo } from "@/pages"; // Import kiểu Annotation từ index
 import { useEffect, useRef, useState, useMemo } from "react";
-
-// Định nghĩa các lớp (class) - Đã có tiếng Anh
-const CLASSES = [
-    { id: 0, name: "car", color: "border-red-500", bg: "bg-red-500/20" },
-    { id: 1, name: "bus", color: "border-blue-500", bg: "bg-blue-500/20" },
-    { id: 2, name: "truck", color: "border-green-500", bg: "bg-green-500/20" },
-    { id: 3, name: "motorcycle", color: "border-yellow-500", bg: "bg-yellow-500/20" },
-];
 
 // Props mới
 interface ToolContainerProps {
@@ -22,6 +14,7 @@ interface ToolContainerProps {
         displayW: number;
         displayH: number;
     }) => void;
+    CLASSES: ClassInfo[]; // <-- MỚI: Nhận CLASSES làm prop
 }
 
 // Kiểu Box giữ nguyên
@@ -47,6 +40,7 @@ export default function ToolContainer({
     annotations,
     onAnnotationsChange,
     onImageLoad,
+    CLASSES, // <-- MỚI: Lấy CLASSES từ props
 }: ToolContainerProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const imgWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -74,7 +68,7 @@ export default function ToolContainer({
     // === STATE MỚI ===
     // State cho chế độ: 'draw_box' (vẽ hộp) hoặc 'add_keypoint' (thêm điểm)
     const [mode, setMode] = useState<"draw_box" | "add_keypoint">("draw_box");
-    // State cho class đang được chọn
+    // State cho class đang được chọn (lấy giá trị đầu từ prop)
     const [selectedClass, setSelectedClass] = useState(CLASSES[0]);
     // State cho ID của box đang chờ gán keypoint
     const [pendingKeypointBoxId, setPendingKeypointBoxId] = useState<string | null>(
@@ -268,9 +262,10 @@ export default function ToolContainer({
         setStartPos(null);
         setMode("draw_box");
         setPendingKeypointBoxId(null);
+        setSelectedClass(CLASSES[0]); // <-- MỚI: Reset class
         // Tải lại kích thước (quan trọng khi ảnh mới có kích thước khác)
         handleImageLoad();
-    }, [file]);
+    }, [file, CLASSES]); // Thêm CLASSES vào dependency
 
     // useEffect này dùng để scale lại `drawingBox` khi resize cửa sổ
     useEffect(() => {
@@ -339,7 +334,7 @@ export default function ToolContainer({
 
     return (
         <>
-            {/* Thanh chọn Class */}
+            {/* Thanh chọn Class (Sử dụng CLASSES từ prop) */}
             <div className="flex gap-2 p-2 bg-gray-100 rounded items-center">
                 <span className="font-medium text-sm text-gray-700">Select Class:</span>
                 {CLASSES.map((cls) => (
