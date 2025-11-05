@@ -17,10 +17,11 @@ const ITEMS_PER_PAGE = 50;
 interface InputContainerProps {
     isWidthCollapsed: boolean;
     onFileSelect: (file: File) => void;
+    onFilesChange: (files: File[]) => void; // <-- MỚI: Callback báo cáo tất cả file
 }
 
 const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
-    ({ onFileSelect, isWidthCollapsed }, ref) => {
+    ({ onFileSelect, isWidthCollapsed, onFilesChange }, ref) => {
         // Ui control vars
         const [isUploading, setIsUploading] = useState(false);
         const [uploadProgress, setUploadProgress] = useState(0);
@@ -123,7 +124,12 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
 
                 setTimeout(() => {
                     setIsUploading(false);
-                    setFiles((prev) => [...prev, ...fileArray]);
+                    // Cập nhật state và báo cáo danh sách file mới
+                    setFiles((prev) => {
+                        const newFileSet = [...prev, ...fileArray];
+                        onFilesChange(newFileSet); // <-- MỚI: Báo cáo danh sách đầy đủ
+                        return newFileSet;
+                    });
                     setCurrentPage(1);
                 }, 500);
             } catch (err) {
@@ -141,8 +147,11 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
         };
 
         const handleDelete = (idx: number) => {
-            setFiles((prev) => prev.filter((_, i) => i !== idx));
-            if (currentPage > Math.ceil((files.length - 1) / ITEMS_PER_PAGE)) {
+            const newFiles = files.filter((_, i) => i !== idx); // Tính toán danh sách mới
+            setFiles(newFiles); // Cập nhật state
+            onFilesChange(newFiles); // <-- MỚI: Báo cáo danh sách đầy đủ
+
+            if (currentPage > Math.ceil((newFiles.length) / ITEMS_PER_PAGE)) {
                 setCurrentPage(Math.max(1, currentPage - 1));
             }
         };
