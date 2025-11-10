@@ -275,6 +275,8 @@ export default function OutputContainer({
                 <table className="w-full text-sm border-collapse">
                     <thead className="sticky top-0">
                         <tr className="bg-gray-200 text-gray-700">
+                            {/* NÂNG CẤP: Thêm cột STT */}
+                            <th className="border-b border-gray-500 px-3 py-2 text-center">#</th>
                             <th className="border-b border-gray-500 px-3 py-2 text-left">Class</th>
                             <th className="border-b border-gray-500 px-3 py-2 text-left">Box (x,y,w,h)</th>
 
@@ -287,8 +289,13 @@ export default function OutputContainer({
                         </tr>
                     </thead>
                     <tbody>
-                        {annotations.map((d) => (
+                        {/* NÂNG CẤP: Thêm 'index' vào map */}
+                        {annotations.map((d, index) => (
                             <tr key={d.id} className="hover:bg-gray-100/50">
+                                {/* NÂNG CẤP: Hiển thị STT (index + 1) */}
+                                <td className="border-b border-gray-400 px-3 text-black py-1.5 text-center font-mono text-xs">
+                                    {index + 1}
+                                </td>
                                 <td className="border-b border-gray-400 px-3 text-black py-1.5">{d.className} ({d.classId})</td>
                                 <td className="border-b border-gray-400 px-3 text-black py-1.5 font-mono text-xs">
                                     {`(${d.box.x}, ${d.box.y}) [${d.box.w}x${d.box.h}]`}
@@ -317,15 +324,14 @@ export default function OutputContainer({
                         ))}
                         {annotations.length === 0 && (
                             <tr>
-                                {/* === THAY ĐỔI: Cập nhật colSpan === */}
-                                <td colSpan={keypointCount > 0 ? 4 : 3} className="text-center p-4 text-gray-500">No annotations yet.</td>
+                                {/* NÂNG CẤP: Cập nhật colSpan (từ 4->5 và 3->4) */}
+                                <td colSpan={keypointCount > 0 ? 5 : 4} className="text-center p-4 text-gray-500">No annotations yet.</td>
                             </tr>
                         )}
                     </tbody>
                 </table>
             </div>
 
-            {/* Nút Download (ở dưới) */}
             <div className="mt-4 flex flex-col gap-2">
                 <button
                     onClick={downloadFile}

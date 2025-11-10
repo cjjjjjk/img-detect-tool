@@ -531,7 +531,7 @@ export default function ToolContainer({
                             />
 
                             {/* Render TẤT CẢ các annotations đã hoàn thành */}
-                            {displayAnnotations.map((ann) => {
+                            {displayAnnotations.map((ann, index) => {
                                 const annClass = getAnnClass(ann);
                                 if (!annClass) return null; // Bỏ qua nếu class không tồn tại
                                 const isPending = ann.id === pendingKeypointBoxId;
@@ -547,8 +547,8 @@ export default function ToolContainer({
                                                 height: ann.displayBox.h,
                                             }}
                                         >
-                                            <span className={`absolute top-0 left-0 ${annClass.color.replace('border', 'text')} text-xs font-bold px-1 text-white bg-red-600/60 backdrop-blur-sm`}>
-                                                {ann.className} {isPending ? `▶ Kpt ${currentKeypointIndex + 1}` : ''}
+                                            <span className={`absolute top-0 left-0 ${annClass.color.replace('border', 'text')} text-[8px] font-bold px-1 whitespace-nowrap text-white bg-red-600/60 backdrop-blur-sm`}>
+                                                [{index + 1}] {ann.className} {isPending ? `▶ Kpt ${currentKeypointIndex + 1}` : ''}
                                             </span>
                                         </div>
 
