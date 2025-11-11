@@ -1,5 +1,5 @@
-import { Annotation, ImageSize, ClassInfo, Keypoint } from "@/pages"; // Import kiểu từ index
-import { useState } from "react";
+import { Annotation, ImageSize, ClassInfo, Keypoint, MaskData } from "@/pages"; // Thêm MaskData
+import { useState, useRef, useEffect } from "react"; // Thêm useRef, useEffect
 import React, { InputHTMLAttributes } from "react"; // Import React và các kiểu
 
 // Bổ sung khai báo cho webkitdirectory
@@ -10,27 +10,163 @@ declare module "react" {
 }
 
 interface OutputContainerProps {
-    annotations: Annotation[];
-    onAnnotationsChange: (data: Annotation[]) => void;
     imageName: string;
     imageSize: ImageSize;
-    // Props mới cho import
+
+    // === PROP CHUNG ===
+    mode: 'detection' | 'segmentation';
+
+    // === PROPS CHO DETECTION ===
+    annotations: Annotation[];
+    onAnnotationsChange: (data: Annotation[]) => void;
     classes: ClassInfo[];
     allImageFiles: File[];
     onBulkAnnotationsUpdate: (newAnnotations: Map<string, Annotation[]>) => void;
-    keypointCount: number; // <-- MỚI: Nhận số KPT
+    keypointCount: number;
+
+    // === PROPS MỚI CHO SEGMENTATION ===
+    maskData: MaskData | null;
 }
 
-export default function OutputContainer({
-    annotations,
-    onAnnotationsChange,
-    imageName,
-    imageSize,
-    classes,
-    allImageFiles,
-    onBulkAnnotationsUpdate,
-    keypointCount, // <-- MỚI
-}: OutputContainerProps) {
+
+// === COMPONENT CON CHO SEGMENTATION OUTPUT ===
+const SegmentationOutput = ({ imageName, maskData, imageSize }: {
+    imageName: string;
+    maskData: MaskData | null;
+    imageSize: ImageSize;
+}) => {
+    const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    // Vẽ preview mask (đen/trắng)
+    useEffect(() => {
+        const canvas = previewCanvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!ctx || !canvas) return;
+
+        // Nếu không có mask, vẽ nền đen
+        if (!maskData) {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+
+        // Tạo canvas tạm để vẽ maskData (vì nó chỉ chứa kênh Alpha)
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = maskData.width;
+        tempCanvas.height = maskData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) return;
+
+        // Vẽ maskData (đang lưu ở kênh A)
+        tempCtx.putImageData(maskData, 0, 0);
+
+        // Chuyển Alpha=255 thành màu trắng, Alpha=0 thành màu đen
+        tempCtx.globalCompositeOperation = 'source-in';
+        tempCtx.fillStyle = 'white'; // Vùng mask (1)
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        tempCtx.globalCompositeOperation = 'destination-over';
+        tempCtx.fillStyle = 'black'; // Nền (0)
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Vẽ lên canvas preview (scale)
+        ctx.imageSmoothingEnabled = false; // Giữ pixel
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+
+    }, [maskData, imageSize]); // Phụ thuộc vào imageSize để set tỷ lệ
+
+    useEffect(() => {
+        // Cập nhật tỷ lệ
+        const canvas = previewCanvasRef.current;
+        if (canvas && imageSize.naturalW > 1) {
+            canvas.style.aspectRatio = `${imageSize.naturalW} / ${imageSize.naturalH}`;
+        }
+    }, [imageSize])
+
+    const downloadMask = () => {
+        if (!maskData || !imageName) return;
+
+        // Tạo canvas tạm với kích thước gốc
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = maskData.width;
+        tempCanvas.height = maskData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) return;
+
+        // Vẽ mask (Trắng/Đen) như logic ở trên
+        tempCtx.putImageData(maskData, 0, 0);
+        tempCtx.globalCompositeOperation = 'source-in';
+        tempCtx.fillStyle = 'white';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.globalCompositeOperation = 'destination-over';
+        tempCtx.fillStyle = 'black';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Tải về
+        const nameWithoutExt = imageName.split('.').slice(0, -1).join('.');
+        const fileName = `${nameWithoutExt}_mask.png`;
+        const url = tempCanvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+    };
+
+    return (
+        <div className="p-4 border rounded mt-4 overflow-hidden min-h-[30vh] max-h-[80vh] flex flex-col bg-white/50">
+            <h2 className="font-semibold mb-2 w-full text-gray-800">Segmentation Mask Preview</h2>
+            <p className="text-sm mb-2 text-black">File: <strong className="text-black">{imageName || "N/A"}</strong></p>
+
+            <div className="flex-grow overflow-y-auto border border-gray-300 rounded bg-black flex justify-center items-center">
+                <canvas
+                    ref={previewCanvasRef}
+                    className="w-full h-auto max-h-full object-contain"
+                    style={{ imageRendering: 'pixelated' }}
+                    // Đặt kích thước cơ bản, useEffect sẽ cập nhật
+                    width={imageSize.naturalW > 1 ? imageSize.naturalW : 300}
+                    height={imageSize.naturalH > 1 ? imageSize.naturalH : 150}
+                />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+                <button
+                    onClick={downloadMask}
+                    className="px-3 py-2 bg-blue-600 text-white rounded w-full font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!imageName || !maskData}
+                >
+                    Download {imageName.split('.').slice(0, -1).join('.') || 'mask'}.png
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+// === COMPONENT CHÍNH (ĐIỀU HƯỚNG) ===
+export default function OutputContainer(props: OutputContainerProps) {
+
+    // === RENDER CÓ ĐIỀU KIỆN ===
+    if (props.mode === 'segmentation') {
+        return <SegmentationOutput
+            imageName={props.imageName}
+            maskData={props.maskData}
+            imageSize={props.imageSize}
+        />;
+    }
+
+    // === LOGIC CŨ CHO DETECTION (Giữ nguyên) ===
+    const {
+        annotations,
+        onAnnotationsChange,
+        imageName,
+        imageSize,
+        classes,
+        allImageFiles,
+        onBulkAnnotationsUpdate,
+        keypointCount,
+    } = props;
 
     const [isImporting, setIsImporting] = useState(false);
 
@@ -50,7 +186,7 @@ export default function OutputContainer({
             const w_norm = box.w / naturalW;
             const h_norm = box.h / naturalH;
 
-            const lineParts = [
+            const lineParts: (string | number)[] = [ // Đổi thành (string | number)
                 classId,
                 x_center.toFixed(6),
                 y_center.toFixed(6),

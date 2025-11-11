@@ -1,28 +1,36 @@
 "use client";
 
-import { Annotation, ClassInfo, Keypoint } from "@/pages"; // Import kiểu Annotation từ index
+import { Annotation, ClassInfo, Keypoint, ImageSize, MaskData } from "@/pages"; // Import kiểu Annotation từ index
 import { useEffect, useRef, useState, useMemo } from "react";
 
-// Props mới
 interface ToolContainerProps {
     file: File | null;
-    annotations: Annotation[];
-    onAnnotationsChange: (data: Annotation[]) => void;
     onImageLoad: (size: {
         naturalW: number;
         naturalH: number;
         displayW: number;
         displayH: number;
     }) => void;
-    // Props mới cho classes và keypoints
+
+    // === PROP CHUNG ===
+    mode: 'detection' | 'segmentation';
+
+    // === PROPS DETECTION ===
+    annotations: Annotation[];
+    onAnnotationsChange: (data: Annotation[]) => void;
     classes: ClassInfo[];
     onClassesChange: (newClasses: ClassInfo[]) => void;
     keypointCount: number;
     onKeypointCountChange: (newCount: number) => void;
-    onModeChange: (mode: "draw_box" | "add_keypoints") => void; // <-- THÊM PROP MỚI
+    onModeChange: (mode: "draw_box" | "add_keypoints") => void;
+
+    // === PROPS SEGMENTATION ===
+    imageSize: ImageSize;
+    maskData: MaskData | null;
+    onMaskChange: (data: MaskData | null) => void;
 }
 
-// Kiểu Box giữ nguyên
+
 interface Box {
     x: number; // display x
     y: number; // display y
@@ -33,24 +41,338 @@ interface Box {
     realW: number; // natural width
     realH: number; // natural height
 }
-
-// Kiểu Annotation được hiển thị (đã scale)
 interface DisplayAnnotation extends Annotation {
     displayBox: { x: number; y: number; w: number; h: number };
-    displayKeypoints: ({ x: number; y: number } | null)[]; // <-- THAY ĐỔI: Thành mảng
+    displayKeypoints: ({ x: number; y: number } | null)[];
 }
 
-export default function ToolContainer({
+// === COMPONENT SEGMENTATION ===
+const SegmentationTool = ({
     file,
-    annotations,
-    onAnnotationsChange,
-    onImageLoad,
-    classes,
-    onClassesChange,
-    keypointCount,
-    onKeypointCountChange,
-    onModeChange, // <-- THÊM PROP MỚI
-}: ToolContainerProps) {
+    imageSize,
+    maskData,
+    onMaskChange,
+    onImageLoad
+}: {
+    file: File | null;
+    imageSize: ImageSize;
+    maskData: MaskData | null;
+    onMaskChange: (data: MaskData | null) => void;
+    onImageLoad: (size: { naturalW: number; naturalH: number; displayW: number; displayH: number; }) => void;
+}) => {
+    const [brushSize, setBrushSize] = useState(8);
+    const [isPainting, setIsPainting] = useState(false);
+    const [paintMode, setPaintMode] = useState<"paint" | "erase">("paint"); // 1 (paint) or 0 (erase)
+
+    const imgRef = useRef<HTMLImageElement | null>(null);
+    const paintCanvasRef = useRef<HTMLCanvasElement | null>(null); // Canvas vẽ mask
+    const paintCtxRef = useRef<CanvasRenderingContext2D | null>(null); // Ref cho context
+    const brushCanvasRef = useRef<HTMLCanvasElement | null>(null); // Canvas cho con trỏ brush
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    const [displaySize, setDisplaySize] = useState({ w: 1, h: 1 });
+    const url = file ? URL.createObjectURL(file) : null;
+
+    // Load ảnh và tính toán kích thước hiển thị
+    const handleImageLoad = () => {
+        if (imgRef.current) {
+            const newDisplaySize = {
+                w: imgRef.current.clientWidth,
+                h: imgRef.current.clientHeight,
+            };
+            setDisplaySize(newDisplaySize);
+
+            // Cập nhật kích thước brush canvas ngay lập tức
+            const brushCanvas = brushCanvasRef.current;
+            if (brushCanvas) {
+                brushCanvas.width = newDisplaySize.w;
+                brushCanvas.height = newDisplaySize.h;
+            }
+
+            // Gọi lại onImageLoad gốc (từ index.tsx)
+            onImageLoad({
+                naturalW: imgRef.current.naturalWidth,
+                naturalH: imgRef.current.naturalHeight,
+                displayW: newDisplaySize.w,
+                displayH: newDisplaySize.h,
+            });
+        }
+    };
+
+    // === Tách useEffect ===
+
+    // 1. Effect này CHỈ set kích thước (khi ảnh thật thay đổi)
+    useEffect(() => {
+        const paintCanvas = paintCanvasRef.current;
+        if (paintCanvas && imageSize.naturalW > 1 && imageSize.naturalH > 1) {
+            // Cập nhật kích thước canvas (natural)
+            paintCanvas.width = imageSize.naturalW;
+            paintCanvas.height = imageSize.naturalH;
+
+            // Lấy context MỘT LẦN và set 'willReadFrequently'
+            const ctx = paintCanvas.getContext('2d', {
+                willReadFrequently: true
+            });
+            paintCtxRef.current = ctx; // Lưu context vào ref
+        }
+    }, [imageSize.naturalW, imageSize.naturalH]); // CHỈ chạy khi kích thước thật thay đổi
+
+    // 2. Effect này CHỈ load data (khi file hoặc mask prop thay đổi)
+    useEffect(() => {
+        const ctx = paintCtxRef.current;
+        if (!ctx) return; // Nếu context chưa sẵn sàng (ảnh chưa load)
+
+        if (maskData) {
+            // Logic load mask data
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = imageSize.naturalW;
+            tempCanvas.height = imageSize.naturalH;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (tempCtx) {
+                tempCtx.putImageData(maskData, 0, 0);
+
+                ctx.clearRect(0, 0, imageSize.naturalW, imageSize.naturalH);
+                ctx.globalCompositeOperation = 'source-over';
+
+                tempCtx.globalCompositeOperation = 'source-in';
+                tempCtx.fillStyle = 'white';
+                tempCtx.fillRect(0, 0, imageSize.naturalW, imageSize.naturalH);
+
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+
+        } else {
+            // Nếu không có maskData (ảnh mới), xóa canvas (full trong suốt)
+            ctx.clearRect(0, 0, imageSize.naturalW, imageSize.naturalH);
+        }
+    }, [maskData, file]); // CHỈ chạy khi mask (prop) hoặc file thay đổi
+
+    // ===================================
+
+    const getCoords = (e: React.MouseEvent): { x: number, y: number } | null => {
+        if (!containerRef.current || !imgRef.current || displaySize.w <= 1 || displaySize.h <= 1) return null;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const scaleX = imageSize.naturalW / displaySize.w;
+        const scaleY = imageSize.naturalH / displaySize.h;
+
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        return { x: Math.round(x), y: Math.round(y) };
+    };
+
+    const drawOnCanvas = (x: number, y: number) => {
+        const ctx = paintCtxRef.current;
+        if (!ctx) return;
+
+        ctx.beginPath();
+        ctx.arc(x, y, brushSize, 0, 2 * Math.PI, true);
+
+        if (paintMode === 'paint') {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'white';
+            ctx.fill();
+        } else {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fill();
+        }
+        ctx.closePath(); // Đóng path lại
+    };
+
+    const drawBrushCursor = (e: React.MouseEvent) => {
+        const brushCtx = brushCanvasRef.current?.getContext('2d');
+        if (!brushCtx || !containerRef.current || displaySize.w <= 1 || imageSize.naturalW <= 1) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        brushCtx.clearRect(0, 0, brushCtx.canvas.width, brushCtx.canvas.height);
+        brushCtx.beginPath();
+
+        const displayBrushSize = brushSize * (displaySize.w / imageSize.naturalW);
+        brushCtx.arc(x, y, displayBrushSize > 1 ? displayBrushSize : 1, 0, 2 * Math.PI);
+
+        brushCtx.strokeStyle = 'white';
+
+        brushCtx.lineWidth = 1;
+        brushCtx.stroke();
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (e.button === 0) setPaintMode('paint');
+        else if (e.button === 2) setPaintMode('erase');
+        else return;
+
+        e.preventDefault();
+        setIsPainting(true);
+        const coords = getCoords(e);
+        if (coords) drawOnCanvas(coords.x, coords.y);
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        drawBrushCursor(e);
+
+        if (!isPainting) {
+            return
+        };
+
+        e.preventDefault();
+        const coords = getCoords(e);
+
+        if (coords) drawOnCanvas(coords.x, coords.y);
+    };
+    const handleMouseUp = (e: React.MouseEvent) => {
+        if (!isPainting) return;
+        e.preventDefault();
+        setIsPainting(false);
+
+        const ctx = paintCtxRef.current;
+        if (!ctx || !paintCanvasRef.current) return;
+
+        const canvasData = ctx.getImageData(0, 0, paintCanvasRef.current.width, paintCanvasRef.current.height);
+
+        const newMask = new ImageData(paintCanvasRef.current.width, paintCanvasRef.current.height);
+        for (let i = 0; i < canvasData.data.length; i += 4) {
+            if (canvasData.data[i + 3] > 0) {
+                newMask.data[i] = 255; // R
+                newMask.data[i + 1] = 255; // G
+                newMask.data[i + 2] = 255; // B
+                newMask.data[i + 3] = 255;
+            } else {
+                // (Mặc định là 0, 0, 0, 0)
+            }
+        }
+        onMaskChange(newMask);
+    };
+
+    const handleMouseLeave = () => {
+        const brushCtx = brushCanvasRef.current?.getContext('2d');
+        if (brushCtx) {
+            brushCtx.clearRect(0, 0, brushCtx.canvas.width, brushCtx.canvas.height);
+        }
+
+        // Dừng vẽ
+        if (isPainting) {
+            setIsPainting(false);
+            // Lưu kết quả (giống hệt handleMouseUp)
+            const ctx = paintCtxRef.current;
+            if (!ctx || !paintCanvasRef.current) return;
+            const canvasData = ctx.getImageData(0, 0, paintCanvasRef.current.width, paintCanvasRef.current.height);
+            const newMask = new ImageData(paintCanvasRef.current.width, paintCanvasRef.current.height);
+            for (let i = 0; i < canvasData.data.length; i += 4) {
+                if (canvasData.data[i + 3] > 0) {
+                    newMask.data[i] = 255; newMask.data[i + 1] = 255; newMask.data[i + 2] = 255;
+                    newMask.data[i + 3] = 255;
+                }
+            }
+            onMaskChange(newMask);
+        }
+    };
+
+    return (
+        <>
+            <div className="flex justify-between items-center flex-wrap gap-4 p-2 bg-gray-100 rounded">
+                <div className="flex gap-2 items-center">
+                    <span className="font-medium text-sm text-gray-700">Brush Size:</span>
+                    <input
+                        type="range"
+                        min="4"
+                        max="32"
+                        value={brushSize}
+                        onChange={(e) => setBrushSize(Number(e.target.value))}
+                        className="w-32"
+                    />
+                    <input
+                        type="number"
+                        min="4"
+                        max="32"
+                        value={brushSize}
+                        onChange={(e) => setBrushSize(Number(e.target.value))}
+                        disabled
+                        className="w-16 px-2 py-1 text-sm border rounded text-black"
+                    />
+                </div>
+            </div>
+
+            <div
+                className="tool-container relative border border-dashed p-4 rounded h-[90%] bg-gray-100/80"
+                onContextMenu={(e) => e.preventDefault()}
+            >
+                {!file ? (
+                    <div className="p-4 border border-dashed font-bold w-[100%] text-gray-500 text-center">
+                        no image selected
+                    </div>
+                ) : (
+                    <div>
+                        <p className="mt-2 text-black text-sm text-center truncate flex">
+                            {file.name}
+                            <span className="absolute top-1 left-4 bg-red-800 text-white text-xs px-2 py-0.5">{`w:${imageSize.naturalW} h:${imageSize.naturalH}`}</span>
+                        </p>
+                        <div
+                            ref={containerRef}
+                            className="relative border w-fit min-w-[80vh] border-gray-300"
+                            style={{ cursor: "none" }} // Ẩn con trỏ mặc định
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseLeave}
+                        >
+                            <img
+                                ref={imgRef}
+                                src={url || ""}
+                                alt={file.name}
+                                onLoad={handleImageLoad}
+                                className="w-full min-h-[100%] max-h-[100%] object-contain rounded pointer-events-none"
+                            />
+                            {/* Canvas vẽ mask (hiển thị đè) */}
+                            <canvas
+                                ref={paintCanvasRef}
+                                className="absolute top-0 left-0 w-full h-full opacity-50 pointer-events-none"
+                                style={{ imageRendering: 'pixelated' }}
+                            />
+                            {/* Canvas cho con trỏ brush */}
+                            <canvas
+                                ref={brushCanvasRef}
+                                className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+};
+
+
+// === COMPONENT CHÍNH (ĐIỀU HƯỚNG) ===
+export default function ToolContainer(props: ToolContainerProps) {
+
+    // === RENDER CÓ ĐIỀU KIỆN ===
+    if (props.mode === 'segmentation') {
+        return <SegmentationTool
+            file={props.file}
+            imageSize={props.imageSize}
+            maskData={props.maskData}
+            onMaskChange={props.onMaskChange}
+            onImageLoad={props.onImageLoad}
+        />;
+    }
+
+    // === LOGIC CŨ CHO DETECTION (Giữ nguyên toàn bộ) ===
+    const {
+        file,
+        annotations,
+        onAnnotationsChange,
+        onImageLoad,
+        classes,
+        onClassesChange,
+        keypointCount,
+        onKeypointCountChange,
+        onModeChange,
+    } = props;
+
     const containerRef = useRef<HTMLDivElement | null>(null);
     const imgWrapperRef = useRef<HTMLDivElement | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
@@ -265,6 +587,9 @@ export default function ToolContainer({
             const currentSelectedExists = classes.find(c => c.id === selectedClass?.id);
             if (!currentSelectedExists) {
                 setSelectedClass(classes[0]); // Chọn class đầu tiên nếu class cũ bị xóa
+            } else {
+                // Cập nhật selectedClass nếu tên thay đổi
+                setSelectedClass(currentSelectedExists);
             }
         } else {
             // @ts-ignore
@@ -275,7 +600,7 @@ export default function ToolContainer({
     }, [file, classes]); // Phụ thuộc vào classes
 
     useEffect(() => {
-        if (!drawingBox || !drawingBox.realW) return;
+        if (!drawingBox || !drawingBox.realW || imgSize.naturalW <= 1) return;
         const scaleX = imgSize.displayW / imgSize.naturalW;
         const scaleY = imgSize.displayH / imgSize.naturalH;
         setDrawingBox({
@@ -353,7 +678,7 @@ export default function ToolContainer({
                 w: Math.round(ann.box.w * scaleX),
                 h: Math.round(ann.box.h * scaleY),
             },
-            // <-- MỚI: Scale tất cả keypoints
+            // Scale tất cả keypoints
             displayKeypoints: ann.keypoints.map(kpt =>
                 kpt
                     ? {
@@ -593,7 +918,6 @@ export default function ToolContainer({
                 )}
             </div>
 
-            {/* Thông báo trạng thái */}
             {mode === 'add_keypoints' && (
                 <div className="p-2 text-center bg-blue-100 text-blue-800 rounded border border-blue-300 font-medium">
                     Right-click INSIDE box <strong>{pendingKeypointBoxId?.substring(0, 6)}...</strong> to assign keypoint <strong>{currentKeypointIndex + 1}/{keypointCount}</strong>. (Press Space to skip)

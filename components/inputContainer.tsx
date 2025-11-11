@@ -16,12 +16,15 @@ const ITEMS_PER_PAGE = 50;
 
 interface InputContainerProps {
     isWidthCollapsed: boolean;
-    onFileSelect: (file: File) => void;
-    onFilesChange: (files: File[]) => void; // <-- MỚI: Callback báo cáo tất cả file
+    onFileSelect: (file: File | null) => void;
+    onFilesChange: (files: File[]) => void;
+
+    mode: 'detection' | 'segmentation';
+    onModeChange: (mode: 'detection' | 'segmentation') => void;
 }
 
 const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
-    ({ onFileSelect, isWidthCollapsed, onFilesChange }, ref) => {
+    ({ onFileSelect, isWidthCollapsed, onFilesChange, mode, onModeChange }, ref) => {
         // Ui control vars
         const [isUploading, setIsUploading] = useState(false);
         const [uploadProgress, setUploadProgress] = useState(0);
@@ -131,12 +134,16 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
                         return newFileSet;
                     });
                     setCurrentPage(1);
+
+                    if (fileArray.length > 0) {
+                        onSelectImg(fileArray[0], 0);
+                    }
                 }, 500);
             } catch (err) {
                 clearInterval(interval);
                 setIsUploading(false);
             } finally {
-                onSelectImg(fileArray[0], 0);
+
             }
         };
 
@@ -153,6 +160,23 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
 
             if (currentPage > Math.ceil((newFiles.length) / ITEMS_PER_PAGE)) {
                 setCurrentPage(Math.max(1, currentPage - 1));
+            }
+
+            // Xử lý nếu xóa ảnh đang chọn
+            if (selectedImgIdx === idx) {
+                if (newFiles.length === 0) {
+                    onFileSelect(null); // Không còn file nào
+                    setSelectedImgIdx(null);
+                } else if (idx >= newFiles.length) {
+                    // Nếu xóa file cuối, chọn file trước đó
+                    onSelectImg(newFiles[newFiles.length - 1], newFiles.length - 1);
+                } else {
+                    // Ngược lại, chọn file ở vị trí index cũ (bây giờ là file mới)
+                    onSelectImg(newFiles[idx], idx);
+                }
+            } else if (selectedImgIdx && selectedImgIdx > idx) {
+                // Nếu xóa file ở trước file đang chọn, giảm index
+                setSelectedImgIdx(selectedImgIdx - 1);
             }
         };
 
@@ -200,6 +224,32 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
 
         return (
             <div>
+                {!isCollapsed && (
+                    <div className="p-2 bg-gray-300 rounded mb-2 text-sm text-gray-800">
+                        <label className="mr-3 cursor-pointer">
+                            <input
+                                type="radio"
+                                value="detection"
+                                checked={mode === 'detection'}
+                                onChange={() => onModeChange('detection')}
+                                className="mr-1"
+                            />
+                            Detection
+                        </label>
+                        <br />
+                        <label className="cursor-pointer">
+                            <input
+                                type="radio"
+                                value="segmentation"
+                                checked={mode === 'segmentation'}
+                                onChange={() => onModeChange('segmentation')}
+                                className="mr-1"
+                            />
+                            Segmentation
+                        </label>
+                    </div>
+                )}
+
                 <div
                     className="border-2 border-dashed border-gray-400 px-3 py-4 rounded-xl text-center cursor-pointer hover:border-blue-500 hover:bg-gray-100/30 transition-colors"
                     onDragOver={(e) => e.preventDefault()}
