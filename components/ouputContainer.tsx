@@ -106,7 +106,7 @@ const SegmentationOutput = ({ imageName, maskData, imageSize }: {
 
         // Tải về
         const nameWithoutExt = imageName.split('.').slice(0, -1).join('.');
-        const fileName = `${nameWithoutExt}_mask.png`;
+        const fileName = `${nameWithoutExt}.png`;
         const url = tempCanvas.toDataURL("image/png");
         const a = document.createElement("a");
         a.href = url;
