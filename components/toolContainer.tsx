@@ -28,6 +28,9 @@ interface ToolContainerProps {
     imageSize: ImageSize;
     maskData: MaskData | null;
     onMaskChange: (data: MaskData | null) => void;
+    // === MỚI: Thêm props cho base mask ===
+    baseMask: MaskData | null;
+    onBaseMaskChange: (mask: MaskData | null) => void;
 }
 
 
@@ -52,13 +55,19 @@ const SegmentationTool = ({
     imageSize,
     maskData,
     onMaskChange,
-    onImageLoad
+    onImageLoad,
+    // === MỚI: Nhận props cho base mask ===
+    baseMask,
+    onBaseMaskChange
 }: {
     file: File | null;
     imageSize: ImageSize;
     maskData: MaskData | null;
     onMaskChange: (data: MaskData | null) => void;
     onImageLoad: (size: { naturalW: number; naturalH: number; displayW: number; displayH: number; }) => void;
+    // === MỚI: Định nghĩa kiểu props ===
+    baseMask: MaskData | null;
+    onBaseMaskChange: (mask: MaskData | null) => void;
 }) => {
     const [brushSize, setBrushSize] = useState(8);
     const [isPainting, setIsPainting] = useState(false);
@@ -120,10 +129,13 @@ const SegmentationTool = ({
     // 2. Effect này CHỈ load data (khi file hoặc mask prop thay đổi)
     useEffect(() => {
         const ctx = paintCtxRef.current;
-        if (!ctx) return; // Nếu context chưa sẵn sàng (ảnh chưa load)
+        if (!ctx || imageSize.naturalW <= 1) return; // Nếu context chưa sẵn sàng (ảnh chưa load)
+
+        // Xóa canvas trước khi vẽ
+        ctx.clearRect(0, 0, imageSize.naturalW, imageSize.naturalH);
 
         if (maskData) {
-            // Logic load mask data
+            // Logic load mask data (maskData là ImageData kênh Alpha)
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = imageSize.naturalW;
             tempCanvas.height = imageSize.naturalH;
@@ -131,21 +143,20 @@ const SegmentationTool = ({
             if (tempCtx) {
                 tempCtx.putImageData(maskData, 0, 0);
 
-                ctx.clearRect(0, 0, imageSize.naturalW, imageSize.naturalH);
-                ctx.globalCompositeOperation = 'source-over';
-
+                // Chuyển mask (kênh Alpha) thành màu trắng
                 tempCtx.globalCompositeOperation = 'source-in';
                 tempCtx.fillStyle = 'white';
                 tempCtx.fillRect(0, 0, imageSize.naturalW, imageSize.naturalH);
 
+                // Vẽ lên canvas chính
+                ctx.globalCompositeOperation = 'source-over';
                 ctx.drawImage(tempCanvas, 0, 0);
             }
-
-        } else {
-            // Nếu không có maskData (ảnh mới), xóa canvas (full trong suốt)
-            ctx.clearRect(0, 0, imageSize.naturalW, imageSize.naturalH);
         }
-    }, [maskData, file]); // CHỈ chạy khi mask (prop) hoặc file thay đổi
+        // Nếu không có maskData (ví dụ, mask là null), canvas đã được xóa (full trong suốt)
+
+    }, [maskData, file, imageSize.naturalW]); // Chạy khi mask (prop) hoặc file thay đổi
+
 
     // ===================================
 
@@ -171,10 +182,10 @@ const SegmentationTool = ({
 
         if (paintMode === 'paint') {
             ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = 'white'; // Vẽ màu trắng (sẽ được chuyển thành Alpha khi lưu)
             ctx.fill();
         } else {
-            ctx.globalCompositeOperation = 'destination-out';
+            ctx.globalCompositeOperation = 'destination-out'; // Tẩy
             ctx.fill();
         }
         ctx.closePath(); // Đóng path lại
@@ -223,28 +234,39 @@ const SegmentationTool = ({
 
         if (coords) drawOnCanvas(coords.x, coords.y);
     };
-    const handleMouseUp = (e: React.MouseEvent) => {
-        if (!isPainting) return;
-        e.preventDefault();
+
+    // === CẬP NHẬT: Hàm lưu (mouseUp / mouseLeave) ===
+    const saveMask = () => {
+        if (!isPainting) return; // Chỉ lưu nếu đang vẽ
         setIsPainting(false);
 
         const ctx = paintCtxRef.current;
         if (!ctx || !paintCanvasRef.current) return;
 
+        // Lấy dữ liệu từ canvas (đang là màu trắng/trong suốt)
         const canvasData = ctx.getImageData(0, 0, paintCanvasRef.current.width, paintCanvasRef.current.height);
 
+        // Tạo ImageData mới để lưu mask (chỉ dùng kênh Alpha)
         const newMask = new ImageData(paintCanvasRef.current.width, paintCanvasRef.current.height);
         for (let i = 0; i < canvasData.data.length; i += 4) {
+            // Nếu Alpha > 0 (vùng được vẽ)
             if (canvasData.data[i + 3] > 0) {
-                newMask.data[i] = 255; // R
-                newMask.data[i + 1] = 255; // G
-                newMask.data[i + 2] = 255; // B
+                // Đặt R,G,B,A thành 255 (để tương thích với logic load)
+                newMask.data[i] = 255;
+                newMask.data[i + 1] = 255;
+                newMask.data[i + 2] = 255;
                 newMask.data[i + 3] = 255;
             } else {
-                // (Mặc định là 0, 0, 0, 0)
+                // Mặc định là 0, 0, 0, 0 (trong suốt)
             }
         }
         onMaskChange(newMask);
+    };
+
+
+    const handleMouseUp = (e: React.MouseEvent) => {
+        e.preventDefault();
+        saveMask();
     };
 
     const handleMouseLeave = () => {
@@ -252,24 +274,33 @@ const SegmentationTool = ({
         if (brushCtx) {
             brushCtx.clearRect(0, 0, brushCtx.canvas.width, brushCtx.canvas.height);
         }
+        // Dừng vẽ và lưu
+        saveMask();
+    };
 
-        // Dừng vẽ
-        if (isPainting) {
-            setIsPainting(false);
-            // Lưu kết quả (giống hệt handleMouseUp)
-            const ctx = paintCtxRef.current;
-            if (!ctx || !paintCanvasRef.current) return;
-            const canvasData = ctx.getImageData(0, 0, paintCanvasRef.current.width, paintCanvasRef.current.height);
-            const newMask = new ImageData(paintCanvasRef.current.width, paintCanvasRef.current.height);
-            for (let i = 0; i < canvasData.data.length; i += 4) {
-                if (canvasData.data[i + 3] > 0) {
-                    newMask.data[i] = 255; newMask.data[i + 1] = 255; newMask.data[i + 2] = 255;
-                    newMask.data[i + 3] = 255;
-                }
+    const handleBaseMaskToggle = () => {
+        if (baseMask) {
+            // Nếu đang có base mask -> Xóa nó
+            if (confirm("Bạn có chắc muốn xóa base mask?")) {
+                onBaseMaskChange(null);
             }
-            onMaskChange(newMask);
+        } else {
+            // Nếu không có base mask -> Lưu mask hiện tại làm base mask
+            if (maskData && maskData.data.some(val => val > 0)) {
+                // Tạo một bản sao của maskData để tránh bị sửa đổi
+                const newBaseMask = new ImageData(
+                    new Uint8ClampedArray(maskData.data),
+                    maskData.width,
+                    maskData.height
+                );
+                onBaseMaskChange(newBaseMask);
+                alert("Đã lưu base mask.");
+            } else {
+                alert("Không thể lưu một mask rỗng làm base mask.");
+            }
         }
     };
+
 
     return (
         <>
@@ -294,6 +325,18 @@ const SegmentationTool = ({
                         className="w-16 px-2 py-1 text-sm border rounded text-black"
                     />
                 </div>
+
+                <div className="flex gap-2 items-center">
+                    <button
+                        onClick={handleBaseMaskToggle}
+                        className={`px-3 py-1 text-sm rounded font-semibold transition-colors ${baseMask
+                            ? 'bg-red-500 text-white hover:bg-red-600'
+                            : 'bg-green-500 text-white hover:bg-green-600'
+                            }`}
+                    >
+                        {baseMask ? "Base mask" : "Save base mask"}
+                    </button>
+                </div>
             </div>
 
             <div
@@ -313,7 +356,7 @@ const SegmentationTool = ({
                         <div
                             ref={containerRef}
                             className="relative border w-fit min-w-[80vh] border-gray-300"
-                            style={{ cursor: "none" }} // Ẩn con trỏ mặc định
+                            style={{ cursor: "none" }}
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
@@ -349,7 +392,7 @@ const SegmentationTool = ({
 // === COMPONENT CHÍNH (ĐIỀU HƯỚNG) ===
 export default function ToolContainer(props: ToolContainerProps) {
 
-    // === RENDER CÓ ĐIỀU KIỆN ===
+    // === RENDER CÓ ĐIỀU KIỆN (CẬP NHẬT PROPS) ===
     if (props.mode === 'segmentation') {
         return <SegmentationTool
             file={props.file}
@@ -357,6 +400,9 @@ export default function ToolContainer(props: ToolContainerProps) {
             maskData={props.maskData}
             onMaskChange={props.onMaskChange}
             onImageLoad={props.onImageLoad}
+            // === MỚI: Truyền props ===
+            baseMask={props.baseMask}
+            onBaseMaskChange={props.onBaseMaskChange}
         />;
     }
 

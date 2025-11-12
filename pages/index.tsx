@@ -113,6 +113,8 @@ export default function Home() {
 
   // --- STATE MỚI: Cho Segmentation ---
   const [allMasks, setAllMasks] = useState<Map<string, MaskData | null>>(new Map());
+  // === MỚI: State cho base mask ===
+  const [baseMask, setBaseMask] = useState<MaskData | null>(null);
 
 
   // Lấy dữ liệu cho ảnh đang chọn
@@ -154,7 +156,7 @@ export default function Home() {
     }
   };
 
-  // Cập nhật kích thước ảnh (Cho cả 2 mode)
+  // === CẬP NHẬT: Cập nhật kích thước ảnh (Cho cả 2 mode) ===
   const handleImageLoad = (size: {
     naturalW: number;
     naturalH: number;
@@ -168,26 +170,43 @@ export default function Home() {
       };
       setImgNaturalSize(newSize);
 
-      // MỚI: Nếu là chế độ segmentation và chưa có mask, tạo mask mặc định
+      // MỚI: Xử lý logic mask cho segmentation
       if (mode === 'segmentation' && selectedImage) {
         setAllMasks(prevMasks => {
-          const currentMask = prevMasks.get(selectedImage.name);
-          // Chỉ tạo nếu chưa tồn tại
-          if (!currentMask) {
-            // Tạo mask đen (full 0)
+          const maskKey = selectedImage.name;
+          const existingMask = prevMasks.get(maskKey);
+          const newMap = new Map(prevMasks);
+
+          // 1. Nếu mask CHƯA TỒN TẠI cho ảnh này
+          if (!existingMask) {
+            // 1a. Áp dụng base mask nếu có và đúng kích thước
+            if (baseMask && baseMask.width === size.naturalW && baseMask.height === size.naturalH) {
+              // Phải tạo copy, nếu không baseMask và currentMask
+              // sẽ trỏ đến cùng 1 object, và việc sửa currentMask sẽ sửa baseMask
+              const newMaskFromBase = new ImageData(
+                new Uint8ClampedArray(baseMask.data),
+                baseMask.width,
+                baseMask.height
+              );
+              newMap.set(maskKey, newMaskFromBase);
+              return newMap;
+            }
+            // 1b. Nếu không có base mask, tạo mask đen (full 0)
+            else {
+              const newMaskData = new ImageData(size.naturalW, size.naturalH);
+              newMap.set(maskKey, newMaskData);
+              return newMap;
+            }
+          }
+          // 2. Nếu mask đã tồn tại, nhưng kích thước ảnh thay đổi (trường hợp lạ)
+          else if (existingMask && (existingMask.width !== size.naturalW || existingMask.height !== size.naturalH)) {
+            // Tạo lại mask đen (không áp dụng base mask vì user đã có mask cũ)
             const newMaskData = new ImageData(size.naturalW, size.naturalH);
-            const newMap = new Map(prevMasks);
-            newMap.set(selectedImage.name, newMaskData);
+            newMap.set(maskKey, newMaskData);
             return newMap;
           }
-          // Nếu mask đã tồn tại (ví dụ, từ lần load trước), kiểm tra kích thước
-          else if (currentMask.width !== size.naturalW || currentMask.height !== size.naturalH) {
-            // Kích thước thay đổi (lạ), tạo lại mask
-            const newMaskData = new ImageData(size.naturalW, size.naturalH);
-            const newMap = new Map(prevMasks);
-            newMap.set(selectedImage.name, newMaskData);
-            return newMap;
-          }
+
+          // 3. Mask đã tồn tại và kích thước đúng, không làm gì cả
           return prevMasks;
         });
       }
@@ -210,12 +229,8 @@ export default function Home() {
   // === HÀM MỚI: Xử lý khi chọn ảnh ===
   const handleSelectImage = (file: File | null) => {
     setSelectedImage(file);
-    // Khi đổi ảnh, nếu là mode segmentation, cần tạo mask ngay
-    if (file && mode === 'segmentation' && imgNaturalSize.naturalW > 1 && imgNaturalSize.naturalH > 1) {
-      // (handleImageLoad sẽ xử lý việc tạo mask nếu nó chưa tồn tại)
-      // Chúng ta có thể gọi lại handleImageLoad nếu cần, 
-      // nhưng logic tốt hơn là đợi handleImageLoad tự nhiên
-    }
+    // Khi đổi ảnh, handleImageLoad sẽ được trigger và lo việc áp dụng
+    // base mask (nếu cần) nên không cần thêm logic ở đây.
   }
 
 
@@ -300,6 +315,9 @@ export default function Home() {
           imageSize={imgNaturalSize}
           maskData={currentMask}
           onMaskChange={handleMaskChange}
+          // === MỚI: Truyền state và setter cho base mask ===
+          baseMask={baseMask}
+          onBaseMaskChange={setBaseMask}
         />
 
         {/* Hotkeys (Render có điều kiện) */}

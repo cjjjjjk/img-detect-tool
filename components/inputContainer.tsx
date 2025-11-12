@@ -97,6 +97,7 @@ const InputContainer = forwardRef<InputContainerHandle, InputContainerProps>(
 
         // ui handlers
         useEffect(() => {
+            console.log(isWidthCollapsed)
             if (!files.length) return;
             setIsCollapsed(isWidthCollapsed)
         }, [isWidthCollapsed])
